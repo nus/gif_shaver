@@ -17,7 +17,7 @@ python -m SimpleHTTPServer 8080
 
 ## Dependency
 
-This repository includes below files from https://github.com/jnordberg/gif.js for encode a GIF file.
+This repository includes below files from https://github.com/jnordberg/gif.js to encode a GIF file.
 
 * gif.js
 * gif.worker.js
