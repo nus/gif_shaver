@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>GIF Shaver</title>
+    <style type="text/css">
+    html>body {
+        background-color: #333;
+        color: #eee;
+        position: relative;
+    }
+    .splitter_area {
+        width: 1024px;
+        position: absolute;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    .splitter_area_left {
+        width: 512px;
+        height: 10px;
+        float: left;
+    }
+    .splitter_area_right {
+        width: 512px;
+        height: 10px;
+        float: left;
+    }
+    .preview_with {
+        width: 480px;
+    }
+    .progress_rect {
+        width: 100%;
+        height: 3px;
+    }
+    #progress_base {
+        background-color: rgba(255, 255, 255, 0.3);
+        margin-bottom: 10px;
+    }
+    #progress_current {
+        background-color: #C00;
+        width: 0%;
+    }
+    #video_file {
+        margin-bottom: 20px;
+    }
+    #output-video {
+        margin-bottom: -7px;
+        position: relative;
+    }
+    #preview_video_cropper {
+        width: 0px;
+        height: 0px;
+        position: absolute;
+    }
+    .cropper_point {
+        width: 15px;
+        height: 15px;
+        position: absolute;
+        background-color: #C00;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        display: none;
+        z-index: 1;
+        cursor: pointer;
+        transition: scale 0.1s;
+    }
+    .cropper_point:hover {
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+    .slider_base {
+        width: 100%;
+        height: 3px;
+        background-color: rgba(255, 255, 255, 0.3);
+        margin-top: 10px;
+        margin-bottom: 10px;
+        position: relative;
+        transition: height 0.2s;
+    }
+    .slider_current {
+        width: 50%;
+        height: 3px;
+        background-color: #C00;
+        position: absolute;
+        transition: height 0.2s;
+    }
+    .slider_knob {
+        width: 20px;
+        height: 20px;
+        background-color: #C00;
+        border-radius: 50%;
+        transform: translate(-50%, -42%);
+        transform-origin: center;
+        position: absolute;
+        left: 50%;
+        transition: transform 0.2s;
+    }
+    .parameter_control:hover > .slider_base {
+        height: 8px;
+        cursor: pointer;
+    }
+    .parameter_control:hover > .slider_base .slider_current {
+        height: 8px;
+    }
+    .parameter_control:hover > .slider_base .slider_knob {
+        transform: translate(-50%, -30%);
+    }
+    .parameter_title {
+        width: 80px;
+        height: 28px;
+        padding-right: 20px;
+        text-align: right;
+    }
+    .parameter_value {
+        width: 80px;
+        padding-left: 20px;
+    }
+    #generated_gif {
+        padding-top: 46px;
+    }
+    #button_apply {
+        margin-top: 15px;
+        display: inline-block;
+        padding: 0.5em 1em;
+        text-decoration: none;
+        background-color: #C00;
+        color: #fff;
+        border-radius: 3px;
+        border: solid 4px #C00;
+        cursor: pointer;
+        font-size: 16px;
+        transition: transform 0.1s;
+    }
+    #button_apply:disabled {
+        color: #aaa;
+    }
+    #button_apply:hover {
+        transform: scale(1.03);
+    }
+    #button_download {
+        margin-top: 15px;
+        display: inline-block;
+        padding: 0.5em 1em;
+        text-decoration: none;
+        background-color: #0000;
+        color: #fff;
+        border-radius: 3px;
+        border: solid 2px #fff;
+        font-size: 16px;
+        transition: transform 0.1s;
+    }
+    #button_download:hover {
+        transform: scale(1.03);
+    }
+    </style>
+    <script type="text/javascript" src="gif.js"></script>
+    <script type="text/javascript">
+    function drag(selector, updateElm) {
+        let elm = document.querySelector(selector);
+        let dragging = false;
+
+        elm.onmousedown = (evt) => {
+            dragging = true;
+            return updateElm(evt);
+        };
+        document.addEventListener('mouseup', (evt) => {
+            if (dragging) {
+                dragging = false;
+                return true;
+            }
+        });
+        document.addEventListener('click', (evt) => {
+            if (dragging) {
+                dragging = false;
+                return updateElm(evt);
+            }
+        });
+        document.addEventListener('mousemove', (evt) => {
+            if (dragging) {
+                return updateElm(evt);
+            }
+            return false;
+        });
+    }
+    function slider(selector, onchange) {
+        let elm = document.querySelector(selector);
+        let elmKnob = elm.querySelector('.slider_knob');
+        let elmCurrent = elm.querySelector('.slider_current');
+
+        let updateKnob = (evt) => {
+            let rect = elm.getBoundingClientRect();
+            let left = evt.clientX - rect.left;
+
+            left = Math.min(Math.max(left, 0), rect.width);
+
+            elmKnob.style.left = left + 'px';
+
+            elmCurrent.style.width = left + 'px';
+
+            let value = left / rect.width;
+            if (onchange) onchange(value);
+
+            return true;
+        };
+
+        drag(selector, updateKnob);
+    }
+    window.onload = function() {
+        let cropperRect = {x0: 0, y0: 0, x1: 0, y1: 0};
+
+        video_file.addEventListener('change', handleFileSeletected, false);
+
+        preview_video.style['height'] = '0px';
+        preview_video.addEventListener('timeupdate', (e) => {
+            progress_current.style['width'] = (preview_video.currentTime / preview_video.duration) * 100 + '%';
+        });
+        preview_video.addEventListener('loadeddata', (e) => {
+            preview_video_cropper.style['width'] = preview_video.clientWidth + 'px';
+            preview_video_cropper.style['height'] = preview_video.clientHeight + 'px';
+            preview_video_cropper.width = preview_video.clientWidth;
+            preview_video_cropper.height = preview_video.clientHeight;
+
+            document.querySelectorAll('.cropper_point').forEach(elm => elm.style.display = 'block');
+
+            let calculateTopLeft = (evt) => {
+                let rect = preview_video_cropper.getBoundingClientRect();
+                let left = evt.clientX - rect.left;
+                let top  = evt.clientY - rect.top;
+
+                left = Math.min(Math.max(left, 0), rect.width);
+                top = Math.min(Math.max(top, 0), rect.height);
+                return [top, left];
+            }
+            cropperRect = {
+                x0: 0,
+                y0: 0,
+                x1: preview_video_cropper.width,
+                y1: preview_video_cropper.height
+            };
+
+            let updateCropperRect = () => {
+                let ctx = preview_video_cropper.getContext('2d');
+                let width = cropperRect.x1 - cropperRect.x0;
+                let height = cropperRect.y1 - cropperRect.y0;
+
+                ctx.clearRect(0, 0, preview_video_cropper.width, preview_video_cropper.height);
+                ctx.fillStyle = '#0008';
+                ctx.fillRect(0, 0, preview_video_cropper.width, preview_video_cropper.height);
+                ctx.clearRect(cropperRect.x0, cropperRect.y0, width, height);
+            };
+
+            cropper_top_left.style.top = '0px';
+            cropper_top_left.style.left = '0px';
+            drag('#cropper_top_left', (evt) => {
+                let [top, left] = calculateTopLeft(evt);
+
+                cropper_top_left.style.left = left + 'px';
+                cropper_top_left.style.top = top + 'px';
+                cropper_top_right.style.top = top + 'px';
+                cropper_bottom_left.style.left = left + 'px';
+
+                cropperRect.x0 = left;
+                cropperRect.y0 = top;
+
+                updateCropperRect();
+
+                return true;
+            });
+
+            cropper_top_right.style.top = '0px';
+            cropper_top_right.style.left = preview_video.clientWidth + 'px';
+            drag('#cropper_top_right', (evt) => {
+                let [top, left] = calculateTopLeft(evt);
+
+                cropper_top_right.style.left = left + 'px';
+                cropper_top_right.style.top = top + 'px';
+                cropper_top_left.style.top = top + 'px';
+                cropper_bottom_right.style.left = left + 'px';
+
+                cropperRect.y0 = top;
+                cropperRect.x1 = left;
+                updateCropperRect();
+
+                return true;
+            });
+
+            cropper_bottom_right.style.top = preview_video.clientHeight + 'px';
+            cropper_bottom_right.style.left = preview_video.clientWidth + 'px';
+            drag('#cropper_bottom_right', (evt) => {
+                let [top, left] = calculateTopLeft(evt);
+
+                cropper_bottom_right.style.left = left + 'px';
+                cropper_bottom_right.style.top = top + 'px';
+                cropper_top_right.style.left = left + 'px';
+                cropper_bottom_left.style.top = top + 'px';
+
+                cropperRect.x1 = left;
+                cropperRect.y1 = top;
+                updateCropperRect();
+
+                return true;
+            });
+
+            cropper_bottom_left.style.top = preview_video.clientHeight + 'px';
+            cropper_bottom_left.style.left = '0px';
+            drag('#cropper_bottom_left', (evt) => {
+                let [top, left] = calculateTopLeft(evt);
+
+                cropper_bottom_left.style.left = left + 'px';
+                cropper_bottom_left.style.top = top + 'px';
+                cropper_top_left.style.left = left + 'px';
+                cropper_bottom_right.style.top = top + 'px';
+
+                cropperRect.x0 = left;
+                cropperRect.y1 = top;
+                updateCropperRect();
+
+                return true;
+            });
+        });
+
+        let paramScale = 1.0;
+        slider('#slider_scale', value => {
+            paramScale = 0.1 + ((1.9 * (value * 10)) / 10);
+            paramScale = paramScale.toFixed(2);
+            document.querySelector('#display_scale').innerText = paramScale + '';
+        });
+        let paramFps = 10;
+        slider('#slider_fps', value => {
+            paramFps = 1 + Math.floor(19 * value);
+            document.querySelector('#display_fps').innerText = paramFps + '';
+        });
+        let paramQuality = 15;
+        slider('#slider_quality', value => {
+            paramQuality = 1 + Math.floor(29 * value);
+            document.querySelector('#display_quality').innerText = paramQuality + '';
+        });
+
+        button_apply.style.display = 'none';
+        button_apply.addEventListener('click', (e) => {
+            button_apply.disabled = true;
+            button_download.disabled = true;
+
+            let scale = (preview_video.videoWidth / preview_video.clientWidth);
+
+            let sx = cropperRect.x0 * scale;
+            let sy = cropperRect.y0 * scale;
+            let sw = (cropperRect.x1 - cropperRect.x0) * scale;
+            let sh = (cropperRect.y1 - cropperRect.y0) * scale;
+            let dw = Math.floor(sw * paramScale);
+            let dh = Math.floor(sh * paramScale);
+
+            let gif = new GIF({
+                worker: 2,
+                workerScript: 'gif.worker.js',
+                width: dw,
+                height: dh,
+                quality: paramQuality
+            });
+            gif.on('finished', (blob) => {
+                console.log('finished', blob);
+                button_apply.disabled = false;
+                button_download.disabled = false;
+
+                button_download.href = generated_gif.src = URL.createObjectURL(blob);
+                button_download.download = 'img_' + dw + 'x' + dh +'.gif';
+
+                generated_gif.onload = () => {
+                    preview_video.currentTime = 0;
+                    button_download.style.display = null;
+                }
+            });
+            preview_video.currentTime = 0;
+            preview_video.loop = false;
+            preview_video.onended = () => {
+                gif.render();
+                clearInterval(interval);
+                preview_video.loop = true;
+                preview_video.play();
+            };
+
+            let canvas = document.createElement('canvas');
+
+            canvas.width = dw;
+            canvas.height = dh;
+            let ctx = canvas.getContext('2d');
+
+            const delay = 1000 / paramFps;
+            let interval = setInterval(() => {
+                ctx.drawImage(preview_video,
+                    sx, sy,
+                    sw, sh,
+                    0, 0, 
+                    dw, dh);
+                gif.addFrame(ctx, {copy: true, delay: delay});
+            }, delay);
+
+            return false;
+        });
+
+        button_download.style.display = 'none';
+    };
+    function handleFileSeletected(e) {
+        let videoFile = null;
+        if (e.target.files.length !== 1) {
+            console.error('No file seleted.');
+            return;
+        } else if (!(videoFile = e.target.files[0])) {
+            console.error('File is null');
+        } else if (!videoFile.type.match('video.*')) {
+            console.error('File is not kind of video.');
+        } else {
+            let reader = new FileReader();
+            reader.onload = (e) => {
+                preview_video.src = e.target.result;
+                preview_video.style['height'] = null;
+            };
+
+            reader.readAsDataURL(videoFile);
+
+            button_apply.disabled = false;
+            button_apply.style.display = null;
+            button_download.disabled = false;
+        }
+    }
+    </script>
+</head>
+<body>
+    <div class="splitter_area">
+        <div class="splitter_area_left">
+            <div id="preview_area" class="preview_with">
+                <input type="file" id="video_file" />
+                <div id="output-video">
+                    <canvas id="preview_video_cropper"></canvas>
+                    <div id="cropper_top_left" class="cropper_point"></div>
+                    <div id="cropper_top_right" class="cropper_point"></div>
+                    <div id="cropper_bottom_right" class="cropper_point"></div>
+                    <div id="cropper_bottom_left" class="cropper_point"></div>
+                    <video id="preview_video" class="preview_with" autoplay loop></video>
+                </div>
+                <div id="progress_base" class="progress_rect">
+                    <div id="progress_current" class="progress_rect">
+                    </div>
+                </div>
+                <table style="width: 100%;">
+                    <tr>
+                        <td class="parameter_title">Scale</td>
+                        <td class="parameter_control">
+                            <div id="slider_scale" class="slider_base">
+                                <div class="slider_current">
+                                </div>
+                                <div class="slider_knob"></div>
+                            </div>
+                        </td>
+                        <td id="display_scale" class="parameter_value">1.00</td>
+                    </tr>
+                    <tr>
+                        <td class="parameter_title">FPS</td>
+                        <td class="parameter_control">
+                            <div id="slider_fps" class="slider_base">
+                                <div class="slider_current">
+                                </div>
+                                <div class="slider_knob"></div>
+                            </div>
+                        </td>
+                        <td id="display_fps" class="parameter_value">10</td>
+                    </tr>
+                    <tr>
+                        <td class="parameter_title">Quality</td>
+                        <td class="parameter_control">
+                            <div id="slider_quality" class="slider_base">
+                                <div class="slider_current"></div>
+                                <div class="slider_knob"></div>
+                            </div>
+                        </td>
+                        <td id="display_quality" class="parameter_value">15</td>
+                    </tr>
+                </table>
+                <button id="button_apply">Apply</button>
+                <a href="#" id="button_download">Download</a>
+            </div>
+        </div>
+        <div class="splitter_area_right">
+            <img id="generated_gif"></img>
+        </div>
+    </div>
+</div>
+</body>
+</html>
