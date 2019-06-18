@@ -352,7 +352,7 @@
             let dh = Math.floor(sh * paramScale);
 
             let gif = new GIF({
-                worker: 2,
+                worker: navigator.hardwareConcurrency || 4,
                 workerScript: 'gif.worker.js',
                 width: dw,
                 height: dh,
