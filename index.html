@@ -239,6 +239,8 @@
                 y1: preview_video_cropper.height
             };
 
+            const MINIMUM_CROP_LENGTH = Math.min(preview_video.clientWidth, preview_video.clientHeight, 20);
+
             let updateCropperRect = () => {
                 let ctx = preview_video_cropper.getContext('2d');
                 let width = cropperRect.x1 - cropperRect.x0;
@@ -254,6 +256,9 @@
             cropper_top_left.style.left = '0px';
             drag('#cropper_top_left', (evt) => {
                 let [top, left] = calculateTopLeft(evt);
+
+                left = Math.min(left, cropperRect.x1 - MINIMUM_CROP_LENGTH);
+                top = Math.min(top, cropperRect.y1 - MINIMUM_CROP_LENGTH);
 
                 cropper_top_left.style.left = left + 'px';
                 cropper_top_left.style.top = top + 'px';
@@ -273,6 +278,9 @@
             drag('#cropper_top_right', (evt) => {
                 let [top, left] = calculateTopLeft(evt);
 
+                left = Math.max(left, cropperRect.x0 + MINIMUM_CROP_LENGTH);
+                top = Math.min(top, cropperRect.y1 - MINIMUM_CROP_LENGTH);
+
                 cropper_top_right.style.left = left + 'px';
                 cropper_top_right.style.top = top + 'px';
                 cropper_top_left.style.top = top + 'px';
@@ -290,6 +298,9 @@
             drag('#cropper_bottom_right', (evt) => {
                 let [top, left] = calculateTopLeft(evt);
 
+                left = Math.max(left, cropperRect.x0 + MINIMUM_CROP_LENGTH);
+                top = Math.max(top, cropperRect.y0 + MINIMUM_CROP_LENGTH);
+
                 cropper_bottom_right.style.left = left + 'px';
                 cropper_bottom_right.style.top = top + 'px';
                 cropper_top_right.style.left = left + 'px';
@@ -306,6 +317,9 @@
             cropper_bottom_left.style.left = '0px';
             drag('#cropper_bottom_left', (evt) => {
                 let [top, left] = calculateTopLeft(evt);
+
+                left = Math.min(left, cropperRect.x1 - MINIMUM_CROP_LENGTH);
+                top = Math.max(top, cropperRect.y0 + MINIMUM_CROP_LENGTH);
 
                 cropper_bottom_left.style.left = left + 'px';
                 cropper_bottom_left.style.top = top + 'px';
